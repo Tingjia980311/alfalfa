@@ -276,7 +276,7 @@ int main( int argc, char *argv[] )
           break;
         }
       }
-
+      cout << "-------" << endl;
       /* pre-read all the prediction frames */
       vector<pair<Optional<KeyFrame>, Optional<InterFrame> > > prediction_frames;
 
@@ -288,6 +288,7 @@ int main( int argc, char *argv[] )
 
       for ( unsigned int i = 0; i < pred_ivf.frame_count(); i++ ) {
         UncompressedChunk unch { pred_ivf.frame( i ), pred_ivf.width(), pred_ivf.height(), false };
+	cout << "-------" << endl;
 
         if ( unch.key_frame() ) {
           KeyFrame frame = pred_decoder.parse_frame<KeyFrame>( unch );
@@ -309,6 +310,7 @@ int main( int argc, char *argv[] )
           stdin.read( 1 );
         }
       }
+      cout << "******" << endl;
 
       Encoder encoder( EncoderStateDeserializer::build<Decoder>( input_state ),
                        two_pass, quality );

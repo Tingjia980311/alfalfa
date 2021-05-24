@@ -35,6 +35,55 @@
 
 #include "file.hh"
 
+class IVFShm
+{
+private:
+   uint8_t * shm_ptr_;
+   Chunk header_;
+   std::string fourcc_;
+   uint16_t width_, height_;
+   uint32_t frame_rate_, time_scale_, frame_count_;
+   uint32_t expected_decoder_minihash_;
+
+   std::vector< std::pair<uint64_t, uint32_t> > frame_index_;
+
+public:
+   static constexpr int supported_header_len = 32;
+   static constexpr int frame_header_len = 12;
+
+   IVFShm( uint8_t * shm_ptr );
+
+   // TODO
+   IVFShm( const IVFShm & other ):
+      shm_ptr_(),
+      header_(NULL),
+      fourcc_( ),
+      width_( other.width() ),
+      height_(),
+      frame_rate_(),
+      time_scale_( ),
+      frame_count_( ),
+      expected_decoder_minihash_( ),
+      frame_index_()
+       {};
+   IVFShm & operator=(const IVFShm &L) {
+      width_ = L.width();
+      return *this;};
+
+   const std::string & fourcc( void ) const { return fourcc_; }
+   uint16_t width( void ) const { return width_; }
+   uint16_t height( void ) const { return height_; }
+   uint32_t frame_rate( void ) const { return frame_rate_; }
+   uint32_t time_scale( void ) const { return time_scale_; }
+   uint32_t frame_count( void ) const { return frame_count_; }
+
+   Chunk frame( const uint32_t & index ) const;
+
+   uint32_t expected_decoder_minihash() const { return expected_decoder_minihash_; }
+
+
+};
+
 class IVF
 {
 private:
@@ -64,6 +113,7 @@ public:
   Chunk frame( const uint32_t & index ) const;
 
   size_t size() const { return file_.size(); }
+  const uint8_t * buffer() const { return file_(0, file_.size()).buffer(); }
 
   uint32_t expected_decoder_minihash() const { return expected_decoder_minihash_; }
 };

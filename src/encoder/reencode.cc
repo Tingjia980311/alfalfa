@@ -28,7 +28,7 @@
 
 #include <limits>
 #include <cmath>
-
+#include <iostream>
 #include "encoder.hh"
 #include "scorer.hh"
 
@@ -377,5 +377,81 @@ void Encoder::reencode( const vector<RasterHandle> & original_rasters,
     } else {
       throw runtime_error( "prediction_frames contained two undefined values" );
     }
+  }
+}
+
+void Encoder::reencode_shm( const vector<RasterHandle> & original_rasters,
+                        const vector<pair<Optional<KeyFrame>, Optional<InterFrame>>> & prediction_frames,
+                        const double kf_q_weight,
+                        const bool extra_frame_chunk,
+                        IVFShmWriter & ivf_writer )
+{
+  if ( original_rasters.empty() ) {
+    throw runtime_error( "no rasters to re-encode" );
+  } else if ( original_rasters.size() != prediction_frames.size() ) {
+    throw runtime_error( "prediction/original_rasters mismatch" );
+  }
+
+  unsigned int start_frame_index = ( extra_frame_chunk ? 1 : 0 );
+
+  for ( unsigned int frame_index = start_frame_index;
+        frame_index < original_rasters.size();
+        frame_index++ ) {
+    const VP8Raster & target_output = original_rasters.at( frame_index ).get();
+
+    bool last_frame = ( frame_index == prediction_frames.size() - 1 );
+
+    if ( target_output.display_width() != width()
+         or target_output.display_height() != height()
+         or width() != ivf_writer.width()
+         or height() != ivf_writer.height() ) {
+      throw runtime_error( "raster size mismatch" );
+    }
+
+    const auto & prediction_frame_ref = prediction_frames.at( frame_index );
+    /* Option 1: Is this an initial KeyFrame that should be re-encoded as an InterFrame? */
+    if ( (frame_index == start_frame_index) and prediction_frame_ref.first.initialized() ) {
+      QuantIndices new_quantizer = prediction_frame_ref.first.get().header().quant_indices;
+      /* try to steal the quantizer from the next frame (if it's an interframe */
+      if ( frame_index + 1 < prediction_frames.size() ) {
+        const auto & next_frame_ref = prediction_frames.at( frame_index + 1 );
+        if ( next_frame_ref.second.initialized() ) {
+          /* it's an InterFrame */
+
+          new_quantizer.y_ac_qi = lrint( kf_q_weight * prediction_frame_ref.first.get().header().quant_indices.y_ac_qi
+                                         + ( 1 - kf_q_weight ) * next_frame_ref.second.get().header().quant_indices.y_ac_qi );
+        }
+      }
+
+      ivf_writer.append_frame( write_frame( reencode_as_interframe( target_output, prediction_frame_ref.first.get(), new_quantizer ) ) );
+      continue;
+    } else if ( frame_index == start_frame_index and extra_frame_chunk ) {
+      /* Option 2: Is this the first interframe of an extra-frame chunk?
+         Then update the quantizer. */
+
+      if ( not prediction_frames.at( 0 ).first.initialized() ) {
+        throw runtime_error( "extra-frame chunks must start with a keyframe." );
+      }
+
+      QuantIndices new_quantizer = prediction_frame_ref.second.get().header().quant_indices;
+      new_quantizer.y_ac_qi = lrint( kf_q_weight *  prediction_frames.at( 0 ).first.get().header().quant_indices.y_ac_qi
+                                     + ( 1 - kf_q_weight ) * prediction_frame_ref.second.get().header().quant_indices.y_ac_qi );
+
+      ivf_writer.append_frame( write_frame( update_residues( target_output,
+                                                             prediction_frame_ref.second.get(),
+                                                             new_quantizer, last_frame ) ) );
+    } else if ( prediction_frame_ref.first.initialized() ) {
+      /* Option 3: Is this another KeyFrame? Then preserve it. */
+      ivf_writer.append_frame( write_frame( prediction_frame_ref.first.get() ) );
+    } else if ( prediction_frame_ref.second.initialized() ) {
+      /* Option 4: Is this an InterFrame? Then update residues. */
+      ivf_writer.append_frame( write_frame( update_residues( target_output,
+                                                             prediction_frame_ref.second.get(),
+                                                             prediction_frame_ref.second.get().header().quant_indices,
+                                                             last_frame ) ) );
+    } else {
+      throw runtime_error( "prediction_frames contained two undefined values" );
+    }
+    
   }
 }

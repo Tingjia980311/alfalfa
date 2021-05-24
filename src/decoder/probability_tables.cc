@@ -33,6 +33,25 @@
 
 using namespace std;
 
+
+template <typename T> size_t put(uint8_t * shm_ptr, int & iter, T u) {
+  size_t posn = iter;
+  for (unsigned i = 0; i < sizeof(u); i++) {
+    shm_ptr[iter++] = (uint8_t) (u & 0xff);
+    u = u >> 8;
+  }
+  return posn;
+}
+template<typename T> void get( uint8_t * shm_ptr, int & iter, T & ret) {
+  ret = (T) 0;
+  for (unsigned i = sizeof(ret); i > 0; i--) {
+    ret = ret << 8;
+    ret = ret | shm_ptr[iter + i - 1];
+  }
+  iter += sizeof(ret);
+}
+
+
 size_t ProbabilityTables::hash( void ) const
 {
   size_t hash_val = 0;
@@ -123,6 +142,48 @@ bool ProbabilityTables::operator==( const ProbabilityTables & other ) const
     and motion_vector_probs == other.motion_vector_probs;
 }
 
+uint32_t ProbabilityTables::get_len() const {
+  uint32_t len = 5;
+  len += BLOCK_TYPES * COEF_BANDS * PREV_COEF_CONTEXTS * ENTROPY_NODES;
+  len += y_mode_probs.size();
+  len += uv_mode_probs.size();
+  len += MV_PROB_CNT * 2;
+  return len;
+}
+
+uint32_t ProbabilityTables::serialize_shm(uint8_t * shm_ptr, int & iter) const {
+  uint32_t len = BLOCK_TYPES * COEF_BANDS * PREV_COEF_CONTEXTS * ENTROPY_NODES +
+                 y_mode_probs.size() + uv_mode_probs.size() + 2 * MV_PROB_CNT;
+  shm_ptr[iter++] = (uint8_t) EncoderSerDesTag::PROB_TABLE;
+  put(shm_ptr, iter, len);
+  
+  for (unsigned i = 0; i < BLOCK_TYPES; i++) {
+    for (unsigned j = 0; j < COEF_BANDS; j++) {
+      for (unsigned k = 0; k < PREV_COEF_CONTEXTS; k++) {
+        for (unsigned l = 0; l < ENTROPY_NODES; l++) {
+          put(shm_ptr, iter, coeff_probs.at(i).at(j).at(k).at(l));
+        }
+      }
+    }
+  }
+
+  for (unsigned i = 0; i < y_mode_probs.size(); i++) {
+    put(shm_ptr, iter, y_mode_probs.at(i));
+  }
+
+  for (unsigned i = 0; i < uv_mode_probs.size(); i++) {
+    put(shm_ptr, iter, uv_mode_probs.at(i));
+  }
+
+  for (unsigned i = 0; i < 2; i++) {
+    for (unsigned j = 0; j < MV_PROB_CNT; j++) {
+      put(shm_ptr, iter, motion_vector_probs.at(i).at(j));
+    }
+  }
+
+  return len + 5;
+}
+
 uint32_t ProbabilityTables::serialize(EncoderStateSerializer &odata) const {
   uint32_t len = BLOCK_TYPES * COEF_BANDS * PREV_COEF_CONTEXTS * ENTROPY_NODES +
                  y_mode_probs.size() + uv_mode_probs.size() + 2 * MV_PROB_CNT;
@@ -155,6 +216,52 @@ uint32_t ProbabilityTables::serialize(EncoderStateSerializer &odata) const {
   }
 
   return len + 5;
+}
+
+ProbabilityTables::ProbabilityTables(uint8_t * shm_ptr, int & iter) {
+  EncoderSerDesTag data_type = static_cast<EncoderSerDesTag>(shm_ptr[iter++]);
+  assert(data_type == EncoderSerDesTag::PROB_TABLE);
+  (void) data_type;   // unused except in assert
+
+  uint32_t expect_len = BLOCK_TYPES * COEF_BANDS * PREV_COEF_CONTEXTS * ENTROPY_NODES +
+                        y_mode_probs.size() + uv_mode_probs.size() + 2 * MV_PROB_CNT;
+  uint32_t get_len;
+  get(shm_ptr, iter, get_len);
+  assert(get_len == expect_len);
+  (void) expect_len;
+  (void) get_len;
+
+  for (unsigned i = 0; i < BLOCK_TYPES; i++) {
+    for (unsigned j = 0; j < COEF_BANDS; j++) {
+      for (unsigned k = 0; k < PREV_COEF_CONTEXTS; k++) {
+        for (unsigned l = 0; l < ENTROPY_NODES; l++) {
+          Probability tmp;
+          get(shm_ptr, iter, tmp);
+          coeff_probs.at(i).at(j).at(k).at(l) = tmp;
+        }
+      }
+    }
+  }
+
+  for (unsigned i = 0; i < y_mode_probs.size(); i++) {
+    Probability tmp;
+    get(shm_ptr, iter, tmp);
+    y_mode_probs.at(i) = tmp;
+  }
+
+  for (unsigned i = 0; i < uv_mode_probs.size(); i++) {
+    Probability tmp;
+    get(shm_ptr, iter, tmp);
+    uv_mode_probs.at(i) = tmp;
+  }
+
+  for (unsigned i = 0; i < 2; i++) {
+    for (unsigned j = 0; j < MV_PROB_CNT; j++) {
+      Probability tmp;
+      get(shm_ptr, iter, tmp);
+      motion_vector_probs.at(i).at(j) = tmp;
+    }
+  }
 }
 
 ProbabilityTables::ProbabilityTables(EncoderStateDeserializer &idata) {

@@ -70,6 +70,7 @@ struct ProbabilityTables
   ProbabilityTables() {}
 
   ProbabilityTables(EncoderStateDeserializer &idata);
+  ProbabilityTables(uint8_t * shm_ptr, int & iter);
 
   template <class HeaderType>
   void coeff_prob_update( const HeaderType & header );
@@ -85,8 +86,13 @@ struct ProbabilityTables
   bool operator!=( const ProbabilityTables & other ) const { return not operator==( other ); }
 
   uint32_t serialize(EncoderStateSerializer &odata) const;
+  uint32_t serialize_shm(uint8_t * shm_ptr, int & iter) const;
+  uint32_t get_len() const;
   static ProbabilityTables deserialize(EncoderStateDeserializer &idata) {
     return ProbabilityTables(idata);
+  }
+  static ProbabilityTables deserialize_shm(uint8_t * shm_ptr, int & iter) {
+    return ProbabilityTables(shm_ptr, iter);
   }
 };
 
@@ -101,6 +107,7 @@ struct FilterAdjustments
   FilterAdjustments() {}
 
   FilterAdjustments(EncoderStateDeserializer &idata);
+  FilterAdjustments(uint8_t * shm_ptr, int & iter);
 
   template <class HeaderType>
   FilterAdjustments( const HeaderType & header ) { update( header ); }
@@ -114,9 +121,14 @@ struct FilterAdjustments
 
   bool operator!=( const FilterAdjustments & other ) const { return not operator==( other ); }
 
+  size_t get_len() const;
+  size_t serialize_shm(uint8_t * shm_ptr, int & iter) const;
   size_t serialize(EncoderStateSerializer &odata) const;
   static FilterAdjustments deserialize(EncoderStateDeserializer &idata) {
     return FilterAdjustments(idata);
+  }
+  static FilterAdjustments deserialize_shm(uint8_t * shm_ptr, int & iter) {
+    return FilterAdjustments(shm_ptr, iter);
   }
 };
 
@@ -129,6 +141,8 @@ struct References
   References( MutableRasterHandle && raster );
 
   References(EncoderStateDeserializer &idata, const uint16_t width, const uint16_t height);
+
+  References(uint8_t * shm_ptr, int & iter, const uint16_t width, const uint16_t height);
 
   const VP8Raster & at( const reference_frame reference_id ) const
   {
@@ -143,9 +157,11 @@ struct References
   bool operator==( const References & other ) const;
 
   bool operator!=( const References & other ) const { return not operator==( other ); }
-
+  size_t get_len() const;
+  size_t serialize_shm(uint8_t * shm_ptr, int & iter) const;
   size_t serialize(EncoderStateSerializer &odata) const;
   static References deserialize(EncoderStateDeserializer &idata);
+  static References deserialize_shm(uint8_t * shm_ptr, int & iter);
 };
 
 using SegmentationMap = TwoD< uint8_t >;
@@ -171,6 +187,8 @@ struct Segmentation
 
   Segmentation(EncoderStateDeserializer &idata, const bool abs, const unsigned width, const unsigned height);
 
+  Segmentation(uint8_t * shm_ptr, int & iter, const bool abs, const unsigned width, const unsigned height);
+
   // testing only
   Segmentation(const unsigned width, const unsigned height);
 
@@ -182,9 +200,11 @@ struct Segmentation
   bool operator==( const Segmentation & other ) const;
 
   Segmentation( const Segmentation & other );
-
+  size_t get_len() const;
+  size_t serialize_shm(uint8_t * shm_ptr, int & iter) const;
   size_t serialize(EncoderStateSerializer &odata) const;
   static Segmentation deserialize(EncoderStateDeserializer &idata);
+  static Segmentation deserialize_shm(uint8_t * shm_ptr, int & iter);
 };
 
 struct DecoderState
@@ -201,6 +221,8 @@ struct DecoderState
                Optional<FilterAdjustments> &&f);
 
   DecoderState(EncoderStateDeserializer &idata, const unsigned s_width, const unsigned s_height);
+
+  DecoderState(uint8_t * shm_ptr, int & iter, const unsigned s_width, const unsigned s_height);
 
   DecoderState( const unsigned int s_width, const unsigned int s_height );
 
@@ -220,7 +242,10 @@ struct DecoderState
 
   size_t hash( void ) const;
 
+  size_t get_len() const;
+  size_t serialize_shm(uint8_t * shm_ptr, int & iter) const;
   size_t serialize(EncoderStateSerializer &odata) const;
+  static DecoderState deserialize_shm( uint8_t * shm_ptr, int & iter );
   static DecoderState deserialize(EncoderStateDeserializer &idata);
 };
 
@@ -253,6 +278,7 @@ public:
   Decoder( const uint16_t width, const uint16_t height );
   Decoder( DecoderState state, References references );
   Decoder( EncoderStateDeserializer &idata );
+  Decoder( uint8_t * shm_ptr, int & iter );
 
   const VP8Raster & example_raster( void ) const { return references_.last; }
 
@@ -291,8 +317,12 @@ public:
 
   bool minihash_match( const uint32_t other_minihash ) const;
 
+  size_t get_len() const;
+
+  size_t serialize_shm(uint8_t * shm_ptr, int & iter) const;
   size_t serialize(EncoderStateSerializer &odata) const;
 
+  static Decoder deserialize_shm(uint8_t * shm_ptr, int & iter);
   static Decoder deserialize(EncoderStateDeserializer &idata);
 
   void set_error_concealment( const bool val ) { error_concealment_ = val; }

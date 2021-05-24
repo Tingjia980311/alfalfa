@@ -62,6 +62,13 @@ class EncoderStateSerializer {
   public:
     EncoderStateSerializer() {}
 
+    std::vector<uint8_t> get() {
+      return data_;
+    }
+    size_t size() {
+      return data_.size();
+    }
+
     void reserve(size_t n) {
       data_.reserve(data_.size() + n);
     }

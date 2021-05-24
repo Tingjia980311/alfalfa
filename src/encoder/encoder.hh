@@ -373,6 +373,12 @@ public:
                  const bool extra_frame_chunk,
                  IVFWriter & ivf_writer );
 
+  void reencode_shm( const std::vector<RasterHandle> & original_rasters,
+                     const std::vector<std::pair<Optional<KeyFrame>, Optional<InterFrame> > > & prediction_frames,
+                     const double kf_q_weight,
+                     const bool extra_frame_chunk,
+                     IVFShmWriter & ivf_writer );
+
   size_t estimate_frame_size( const VP8Raster & raster, const size_t y_ac_qi );
 
   Decoder export_decoder() const { return { decoder_state_, references_ }; }

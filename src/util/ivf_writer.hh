@@ -30,7 +30,37 @@
 #define IVF_WRITER_HH
 
 #include "ivf.hh"
+#include <cstring>
+#include "/home/ubuntu/excamera_project/ephe-store/include/function_interface/cpp_function.hpp"
 
+class IVFShmWriter
+{
+private:
+  UserLibraryInterface * library;
+  uint8_t * shm_ptr_;
+  uint64_t size_;
+  uint32_t frame_count_;
+
+  uint16_t width_;
+  uint16_t height_;
+  std::string & bucket_;
+  std::string & key_;
+
+public:
+   IVFShmWriter( UserLibraryInterface* library,
+                 std::string & bucket,
+                 std::string & key,
+                 const std::string & fourcc,
+                 const uint16_t width,
+                 const uint16_t height,
+                 const uint32_t frame_rate,
+                 const uint32_t time_scale );
+   size_t append_frame( const Chunk & chunk);
+   void set_expected_decoder_entry_hash( const uint32_t minihash ); /* ExCamera invention */
+   uint64_t size() const { return size_; }
+   uint16_t width() const { return width_; }
+   uint16_t height() const { return height_; }
+};
 class IVFWriter
 {
 private:

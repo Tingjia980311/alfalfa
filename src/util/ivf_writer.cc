@@ -52,6 +52,75 @@ static void memcpy_le32( uint8_t * dest, const uint32_t val )
   memcpy( dest, &swizzled, sizeof( swizzled ) );
 }
 
+
+IVFShmWriter::IVFShmWriter( UserLibraryInterface* library_,
+                            std::string & bucket,
+                            std::string & key,
+                            const std::string & fourcc,
+                            const uint16_t width,
+                            const uint16_t height,
+                            const uint32_t frame_rate,
+                            const uint32_t time_scale )
+  :
+   library(library_),
+   shm_ptr_(NULL),
+   size_(0),
+   frame_count_(0),
+   width_(width),
+   height_(height),
+   bucket_(bucket),
+   key_(key)
+{
+  if ( fourcc.size() != 4 ) {
+    throw internal_error( "IVF", "FourCC must be four bytes long" );
+  }
+
+  shm_ptr_ = reinterpret_cast <uint8_t *> (library->gen_bytes(bucket, key, IVF::supported_header_len));
+  memcpy( shm_ptr_, "DKIF", 4);
+  /* skip version number (= 0) */
+  memcpy_le16( shm_ptr_ + 6, IVF::supported_header_len );
+  memcpy( shm_ptr_ + 8, fourcc.data(), 4);
+  memcpy_le16( shm_ptr_ + 12, width );
+  memcpy_le16( shm_ptr_ + 14, height );
+  memcpy_le32( shm_ptr_ + 16, frame_rate );
+  memcpy_le32( shm_ptr_ + 20, time_scale );
+  memcpy_le32( shm_ptr_ + 24, frame_count_ );
+
+  size_ += IVF::supported_header_len;
+  // check correctness
+  // for ( int i = 0; i < 12; i++) {
+  //   cout << (char) shm_ptr_[i];
+  // }
+  
+  // cout << endl;
+  // uint16_t val;
+  // memcpy( &val, shm_ptr_ + 6, sizeof(uint16_t));
+  // cout << le16toh( val ) << endl;
+  // cout << frame_rate << time_scale << endl;
+}
+
+size_t IVFShmWriter::append_frame( const Chunk & chunk )
+{
+  int new_size = size_ + IVF::supported_header_len + chunk.size();
+  shm_ptr_ = reinterpret_cast <uint8_t *> (library->gen_bytes(bucket_, key_, new_size));
+  memcpy_le32( shm_ptr_ + size_, chunk.size());
+  size_ += IVF::supported_header_len;
+  size_t written_offset = size_;
+  memcpy( shm_ptr_ + size_, chunk.buffer(), chunk.size());
+  size_ += chunk.size();
+
+  frame_count_ ++;
+
+  memcpy_le32( shm_ptr_ + 24, frame_count_ );
+
+  return written_offset;
+}
+
+void IVFShmWriter::set_expected_decoder_entry_hash( const uint32_t minihash ) /* ExCamera invention */
+{
+  memcpy_le32( shm_ptr_ + 28, minihash ); /* ExCamera invention */
+}
+
 IVFWriter::IVFWriter( FileDescriptor && fd,
                       const string & fourcc,
                       const uint16_t width,
