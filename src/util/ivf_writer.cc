@@ -101,10 +101,10 @@ IVFShmWriter::IVFShmWriter( UserLibraryInterface* library_,
 
 size_t IVFShmWriter::append_frame( const Chunk & chunk )
 {
-  int new_size = size_ + IVF::supported_header_len + chunk.size();
+  int new_size = size_ + IVF::frame_header_len + chunk.size();
   shm_ptr_ = reinterpret_cast <uint8_t *> (library->gen_bytes(bucket_, key_, new_size));
   memcpy_le32( shm_ptr_ + size_, chunk.size());
-  size_ += IVF::supported_header_len;
+  size_ += IVF::frame_header_len;
   size_t written_offset = size_;
   memcpy( shm_ptr_ + size_, chunk.buffer(), chunk.size());
   size_ += chunk.size();

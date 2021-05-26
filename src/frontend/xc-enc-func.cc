@@ -53,6 +53,11 @@ extern "C" {
             input_reader = make_shared<YUV4MPEGReader>( input_y4m );
 
             Decoder pred_decoder( input_reader->display_width(), input_reader->display_height() );
+
+            if ( arg_size == 5 ) {
+                int iter = 0;
+                pred_decoder = Decoder::deserialize_shm( prev_ivf_state, iter );
+            }
             
             string ivf_bucket = "bucket" +std::to_string(worker_id);
             string ivf_key = "ivf" + std::to_string(act_id);
@@ -72,8 +77,9 @@ extern "C" {
             
 
             vector<pair<Optional<KeyFrame>, Optional<InterFrame> > > prediction_frames;
-
+            cout << "..." << endl;
             IVFShm pred_ivf {prev_ivf};
+            
 
             if ( not pred_decoder.minihash_match( pred_ivf.expected_decoder_minihash() ) ) {
                 throw Invalid( "Mismatch between prediction IVF and prediction_ivf_initial_state" );
