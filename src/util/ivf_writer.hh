@@ -37,19 +37,21 @@ class IVFShmWriter
 {
 private:
   UserLibraryInterface * library;
+  EpheObject * ivf_obj;
   uint8_t * shm_ptr_;
   uint64_t size_;
   uint32_t frame_count_;
 
   uint16_t width_;
   uint16_t height_;
-  std::string & bucket_;
-  std::string & key_;
+  int ivf_tgt_id;
+  int worker_id_;
+  int act_id_;
 
 public:
    IVFShmWriter( UserLibraryInterface* library,
-                 std::string & bucket,
-                 std::string & key,
+                 int worker_id,
+                 int act_id,
                  const std::string & fourcc,
                  const uint16_t width,
                  const uint16_t height,
@@ -57,9 +59,11 @@ public:
                  const uint32_t time_scale );
    size_t append_frame( const Chunk & chunk);
    void set_expected_decoder_entry_hash( const uint32_t minihash ); /* ExCamera invention */
+   void send() ;
    uint64_t size() const { return size_; }
    uint16_t width() const { return width_; }
    uint16_t height() const { return height_; }
+   
 };
 class IVFWriter
 {

@@ -54,8 +54,8 @@ static void memcpy_le32( uint8_t * dest, const uint32_t val )
 
 
 IVFShmWriter::IVFShmWriter( UserLibraryInterface* library_,
-                            std::string & bucket,
-                            std::string & key,
+                            int worker_id,
+                            int act_id,
                             const std::string & fourcc,
                             const uint16_t width,
                             const uint16_t height,
@@ -63,30 +63,39 @@ IVFShmWriter::IVFShmWriter( UserLibraryInterface* library_,
                             const uint32_t time_scale )
   :
    library(library_),
+   ivf_obj(NULL),
    shm_ptr_(NULL),
    size_(0),
    frame_count_(0),
    width_(width),
    height_(height),
-   bucket_(bucket),
-   key_(key)
+   ivf_tgt_id((worker_id*worker_id - worker_id) / 2 + act_id),
+   worker_id_(worker_id),
+   act_id_(act_id)
+
 {
   if ( fourcc.size() != 4 ) {
     throw internal_error( "IVF", "FourCC must be four bytes long" );
   }
-
-  shm_ptr_ = reinterpret_cast <uint8_t *> (library->gen_bytes(bucket, key, IVF::supported_header_len));
-  memcpy( shm_ptr_, "DKIF", 4);
+  // ivf_obj = library->create_object_with_bucket_key(bucket, key, IVF::supported_header_len);
+  string target_func ("xc-enc");
+  if (act_id == worker_id)
+    ivf_obj = library->create_object_with_bucket_key("output", "ivf", IVF::supported_header_len + 2);
+  else ivf_obj = library->create_object_with_target(target_func, ivf_tgt_id, IVF::supported_header_len + 2);
+  shm_ptr_ = reinterpret_cast <uint8_t *> (ivf_obj->get_value());
+  shm_ptr_[0] = (uint8_t) worker_id;
+  shm_ptr_[1] = (uint8_t) act_id + 1;
+  memcpy( shm_ptr_ + 2, "DKIF", 4);
   /* skip version number (= 0) */
-  memcpy_le16( shm_ptr_ + 6, IVF::supported_header_len );
-  memcpy( shm_ptr_ + 8, fourcc.data(), 4);
-  memcpy_le16( shm_ptr_ + 12, width );
-  memcpy_le16( shm_ptr_ + 14, height );
-  memcpy_le32( shm_ptr_ + 16, frame_rate );
-  memcpy_le32( shm_ptr_ + 20, time_scale );
-  memcpy_le32( shm_ptr_ + 24, frame_count_ );
+  memcpy_le16( shm_ptr_ + 8, IVF::supported_header_len );
+  memcpy( shm_ptr_ + 10, fourcc.data(), 4);
+  memcpy_le16( shm_ptr_ + 14, width );
+  memcpy_le16( shm_ptr_ + 16, height );
+  memcpy_le32( shm_ptr_ + 18, frame_rate );
+  memcpy_le32( shm_ptr_ + 22, time_scale );
+  memcpy_le32( shm_ptr_ + 26, frame_count_ );
 
-  size_ += IVF::supported_header_len;
+  size_ += IVF::supported_header_len + 2;
   // check correctness
   // for ( int i = 0; i < 12; i++) {
   //   cout << (char) shm_ptr_[i];
@@ -102,7 +111,12 @@ IVFShmWriter::IVFShmWriter( UserLibraryInterface* library_,
 size_t IVFShmWriter::append_frame( const Chunk & chunk )
 {
   int new_size = size_ + IVF::frame_header_len + chunk.size();
-  shm_ptr_ = reinterpret_cast <uint8_t *> (library->gen_bytes(bucket_, key_, new_size));
+  string target_func ("xc-enc");
+  if (act_id_ == worker_id_)
+    ivf_obj = library->create_object_with_bucket_key("output", "ivf", new_size);
+  else ivf_obj = library->create_object_with_target(target_func, ivf_tgt_id, new_size);
+  // shm_ptr_ = reinterpret_cast <uint8_t *> (library->gen_bytes(bucket_, key_, new_size));
+  shm_ptr_ = reinterpret_cast <uint8_t *> (ivf_obj->get_value());
   memcpy_le32( shm_ptr_ + size_, chunk.size());
   size_ += IVF::frame_header_len;
   size_t written_offset = size_;
@@ -111,14 +125,19 @@ size_t IVFShmWriter::append_frame( const Chunk & chunk )
 
   frame_count_ ++;
 
-  memcpy_le32( shm_ptr_ + 24, frame_count_ );
+  memcpy_le32( shm_ptr_ + 26, frame_count_ );
 
   return written_offset;
 }
 
 void IVFShmWriter::set_expected_decoder_entry_hash( const uint32_t minihash ) /* ExCamera invention */
 {
-  memcpy_le32( shm_ptr_ + 28, minihash ); /* ExCamera invention */
+  memcpy_le32( shm_ptr_ + 30, minihash ); /* ExCamera invention */
+}
+
+void IVFShmWriter::send()
+{
+  library->send_object(ivf_obj);
 }
 
 IVFWriter::IVFWriter( FileDescriptor && fd,
