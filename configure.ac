@@ -67,7 +67,7 @@ AC_ARG_ENABLE([vp8play],
   [AS_HELP_STRING([--enable-vp8play], [Build vp8play (requires gl, glu, glfw3, glew)])],
   [case "$enableval" in
     '' | yes)
-        buildvp8=true
+        buildvp8=false
         ;;
     no)
         buildvp8=false
@@ -76,7 +76,7 @@ AC_ARG_ENABLE([vp8play],
         AC_MSG_ERROR([Unknown argument '$enableval' to --enable-vp8play])
         ;;
    esac],
-  [buildvp8=true])
+  [buildvp8=false])
 
 AM_CONDITIONAL([BUILDVP8PLAY], [test "$buildvp8" = true])
 
